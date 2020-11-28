@@ -20,6 +20,6 @@ library(gridExtra)
 holder <- read_csv("vehicles.csv",col_names=TRUE,col_types = cols(.default = col_character()))
 raw_data_vehicle <- data.frame(holder)
 head(raw_data_vehicle)
-str(raw_data)
-summary(raw_data)
+str(raw_data_vehicle)
+summary(raw_data_vehicle)
 ```
