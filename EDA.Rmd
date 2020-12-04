@@ -18,8 +18,41 @@ library(gridExtra)
 
 ```{r}
 holder <- read_csv("vehicles.csv",col_names=TRUE,col_types = cols(.default = col_character()))
-raw_data_vehicle <- data.frame(holder)
+raw_data_vehicle <- tibble(holder)
 head(raw_data_vehicle)
 str(raw_data_vehicle)
 summary(raw_data_vehicle)
 ```
+
+```{r}
+raw_data_vehicle %>%
+  distinct(fuelType2)
+```
+
+
+```{r}
+type_data <- tibble(Year = raw_data_vehicle$year, FuelType1 = raw_data_vehicle$fuelType1, FuelType2 = raw_data_vehicle$fuelType2)
+
+type_data <- type_data %>%
+  mutate(VehicleType = ifelse((FuelType1 == 'Regular Gasoline' | FuelType1 == 'Premium Gasoline' | FuelType1 == 'Midgrade Gasoline') & is.na(FuelType2) , 'Gasoline', ifelse((FuelType1 == 'Regular Gasoline' | FuelType1 == 'Premium Gasoline' | FuelType1 == 'Midgrade Gasoline') & FuelType2 == 'Electricity', 'HEV', ifelse(FuelType1 == 'Electricity', 'BEV', ifelse((FuelType1 == 'Regular Gasoline' | FuelType1 == 'Premium Gasoline' | FuelType1 == 'Midgrade Gasoline') & (FuelType2 == 'E85' | FuelType2 == 'Propane' | FuelType2 == 'Natural Gas'), 'Hybrid', FuelType1)))))
+ 
+type_plot <- type_data %>%
+  group_by(Year, VehicleType) %>%
+  tally()
+
+type_plot <- type_plot %>%
+  rename(Count = n)
+```
+
+
+```{r}
+ggplot(type_plot, aes(x = Year, y = Count, color = VehicleType)) + 
+  geom_point() + 
+  ggtitle('Count of VehicleType Trend with Model Year') +
+  ylab('Count of VehicleType') + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank())
+         
+```
+
+
