@@ -14,6 +14,7 @@ library(tidyverse)
 library(dplyr)
 library(ggplot2)
 library(gridExtra)
+library(stringr)
 ```
 
 ```{r}
@@ -34,6 +35,9 @@ raw_data_vehicle %>%
 type_data <- tibble(Year = raw_data_vehicle$year, FuelType1 = raw_data_vehicle$fuelType1, FuelType2 = raw_data_vehicle$fuelType2)
 
 type_data <- type_data %>%
+  mutate(Year = as.numeric(Year))
+
+type_data <- type_data %>%
   mutate(VehicleType = ifelse((FuelType1 == 'Regular Gasoline' | FuelType1 == 'Premium Gasoline' | FuelType1 == 'Midgrade Gasoline') & is.na(FuelType2) , 'Gasoline', ifelse((FuelType1 == 'Regular Gasoline' | FuelType1 == 'Premium Gasoline' | FuelType1 == 'Midgrade Gasoline') & FuelType2 == 'Electricity', 'HEV', ifelse(FuelType1 == 'Electricity', 'BEV', ifelse((FuelType1 == 'Regular Gasoline' | FuelType1 == 'Premium Gasoline' | FuelType1 == 'Midgrade Gasoline') & (FuelType2 == 'E85' | FuelType2 == 'Propane' | FuelType2 == 'Natural Gas'), 'Hybrid', FuelType1)))))
  
 type_plot <- type_data %>%
@@ -41,18 +45,154 @@ type_plot <- type_data %>%
   tally()
 
 type_plot <- type_plot %>%
-  rename(Count = n)
+  rename(Count = n) %>%
+  filter(Year<2021)
+
+
+type_plot
 ```
 
 
 ```{r}
+
 ggplot(type_plot, aes(x = Year, y = Count, color = VehicleType)) + 
-  geom_point() + 
+  geom_line() + 
+  scale_y_log10() +
   ggtitle('Count of VehicleType Trend with Model Year') +
   ylab('Count of VehicleType') + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
         axis.title.x = element_blank())
-         
+
+# EV vs Gasoline prediction
 ```
 
+```{r}
+
+```
+
+
+
+```{r}
+make_data <- tibble(Make = raw_data_vehicle$make, Model = raw_data_vehicle$model, Year = raw_data_vehicle$year, CO2 = raw_data_vehicle$co2TailpipeGpm, MPG = raw_data_vehicle$comb08, Fuel_Consumption = raw_data_vehicle$barrels08)
+
+make_data <- make_data %>%
+  mutate(MPG = as.integer(MPG), Make = as.factor(Make), Model = as.factor(Model))%>%
+  mutate(CO2 = as.numeric(CO2), MPG = as.numeric(MPG), Fuel_Consumption = as.numeric(Fuel_Consumption))
+
+make_data <- make_data %>%
+  group_by(Make, Model) %>%
+  mutate(CO2 = mean(CO2), MPG = mean(MPG), Fuel_Consumption = mean(Fuel_Consumption))
+
+make_data <- distinct(make_data)
+
+make_data
+```
+```{r}
+max_make <- make_data %>%
+  group_by(Make) %>%
+  tally() %>%
+  rename(Count = n) %>%
+  arrange(desc(Count))
+
+max_make %>%
+  filter(Make == 'Rolls-Royce' | Make == 'Tesla' | Make == 'Lamborghini' | Make == 'Ferrari' | Make == 'Fiat')
+```
+
+```{r}
+avg_MPG <- tibble(Make = raw_data_vehicle$make, MPG = raw_data_vehicle$comb08)
+
+avg_MPG <- avg_MPG%>%
+  mutate(MPG = as.integer(MPG)) %>%
+  group_by(Make) %>%
+  mutate(MPG = mean(MPG)) %>%
+  arrange(desc(MPG))
+
+avg_MPG <- distinct(avg_MPG)
+
+avg_MPG
+```
+
+```{r}
+make_data <- make_data %>%
+  filter(Make == 'Rolls-Royce' | Make == 'Ferrari' | Make == 'Fiat')
+
+make_data
+
+# take 3 manufacturers, luxury vehicle(Rolls-Royce) - high performance(Koenigsegg/Lamborghini/Ferrari) - regular(Fiat)
+```
+```{r}
+ggplot(make_data, aes(x = MPG, y = CO2 , color = Make)) + 
+  geom_point()
+
+ggplot(make_data, aes(x = MPG, y = Fuel_Consumption , color = Make)) + 
+  geom_point()
+
+ggplot(make_data, aes(x = Fuel_Consumption, y = CO2 , color = Make)) + 
+  geom_point()
+```
+```{r}
+library(cluster)
+library(factoextra)
+
+cluster_data <- tibble(Model = make_data$Model, MPG = make_data$MPG, CO2 = make_data$CO2, Fuel = make_data$Fuel_Consumption)
+cluster_data <- distinct(cluster_data)
+str(cluster_data)
+
+cluster_data <- cluster_data %>% 
+  remove_rownames %>% 
+  column_to_rownames(var = "Model")
+
+head(cluster_data)
+
+
+cluster_data2 <- scale(cluster_data, center= FALSE, scale = apply(cluster_data, 2, sd, na.rm = TRUE))
+head(cluster_data2)
+
+```
+
+
+```{r}
+distance <- get_dist(cluster_data2)
+fviz_dist(distance, gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))
+
+k2 <- kmeans(cluster_data2, centers = 5, nstart = 25)
+k2
+```
+
+n=5 since overlap between Roll-Royce and Ferrari and Fiat electric vehicle acts as outlier
+
+```{r}
+p <- fviz_cluster(k2, data = cluster_data2, geom = c("point", "text"), labelsize = 6, stand = TRUE, outlier.color = "black",outlier.shape = 19)
+p + 
+  #scale_x_log10() +
+  #scale_y_log10() +
+  theme(text = element_text(size=15),
+        axis.title=element_text(size=10))
+```
+```{r}
+cluster_data2 %>%
+  as_tibble() %>%
+  mutate(cluster = k2$cluster,
+         state = row.names(cluster_data2)) %>%
+  ggplot(aes(MPG, CO2, color = factor(cluster), label = state)) +
+  geom_point(size = 0.25) +
+  geom_text(size = 2, hjust = 0, vjust = 0, nudge_x = 0.1, angle = 45) +
+  scale_x_log10() +
+  theme(text = element_text(size=15),
+        axis.title=element_text(size=10))
+```
+
+
+
+
+```{r}
+clean_data <- raw_data_vehicle %>%
+  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Regular Gasoline", replacement = "Gasoline")) %>%
+  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Premium Gasoline", replacement = "Gasoline")) %>%
+  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Midgrade Gasoline", replacement = "Gasoline"))
+
+clean_data %>%
+  distinct(fuelType1)
+
+```
 
