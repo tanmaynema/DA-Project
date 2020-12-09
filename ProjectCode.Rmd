@@ -1,0 +1,88 @@
+---
+title: "12709 - Project"
+author: "Tanmay Nema"
+date: "12/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(stringr)
+```
+
+
+
+```{r}
+
+# Import data from csv and save in a data frame
+holder <- read.csv("vehicles.csv")
+raw_data_vehicle <- tibble(holder)
+
+#summary before data cleaning
+head(raw_data_vehicle)
+str(raw_data_vehicle)
+summary(raw_data_vehicle)
+
+#removing unwanted columns (might have to add FuelSaveSpend)
+data <- raw_data_vehicle %>%
+  select(Year = year, Make = make, Model =model, FuelType1 = fuelType1, FuelType2 = fuelType2, CityMPG = city08, HighMPG = highway08, CombinedMPG = comb08, C02 = co2TailpipeGpm, SuperCharger = sCharger, TurboCharger = tCharger,  FuelConsumption = barrels08, Cylinders = cylinders)
+
+print('Summary of Data')
+summary(data)
+
+print('Dimension of Data')
+dim(data)
+
+# Convert Categorical variables to Factors
+data <- data %>%
+  mutate(Make = as.factor(Make), Model = as.factor(Model), FuelType1 = as.factor(FuelType1), FuelType2 = as.factor(FuelType2), SuperCharger = as.factor(SuperCharger), TurboCharger = as.factor(TurboCharger))
+
+# Replace NA's from data
+data$Cylinders <- data$Cylinders %>% replace_na(0)
+
+summary(data)
+
+# Create Frequency Tables for EDA
+df1 <- as.data.frame(table(data$Make)) %>%
+  arrange(desc(Freq))
+df2 <- as.data.frame(table(data$FuelType1)) %>%
+  arrange(desc(Freq))
+df3 <- as.data.frame(table(data$FuelType2)) %>%
+  arrange(desc(Freq))
+df4 <- as.data.frame(table(data$SuperCharger)) %>%
+  arrange(desc(Freq))
+df5 <- as.data.frame(table(data$TurboCharger)) %>%
+  arrange(desc(Freq))
+df6 <- as.data.frame(table(data$Cylinders)) %>%
+  arrange(desc(Freq))
+
+# Boxplots for numerical variables for EDA
+boxplot(data$CombinedMPG, data$CityMPG, data$HighMPG, col = "sky blue" , border = "black")
+
+boxplot(data$C02, col = "sky blue" , border = "black")
+boxplot(data$FuelConsumption, col = "sky blue" , border = "black")
+
+# Remove year 2021 since it may give outliers
+clean_data <- data %>%
+  filter(Year <2021)
+
+# Combining all the Gasoline Types as one 
+clean_data <- df %>%
+  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Regular Gasoline", replacement = "Gasoline")) %>%
+  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Premium Gasoline", replacement = "Gasoline")) %>%
+  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Midgrade Gasoline", replacement = "Gasoline"))
+
+clean_data
+```
+
+```{r}
+
+```
+
