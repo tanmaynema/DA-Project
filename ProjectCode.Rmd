@@ -15,6 +15,11 @@ library(dplyr)
 library(ggplot2)
 library(gridExtra)
 library(stringr)
+
+#library simran
+library(ggpubr)
+
+
 ```
 
 
@@ -30,15 +35,19 @@ head(raw_data_vehicle)
 str(raw_data_vehicle)
 summary(raw_data_vehicle)
 
+##------------------------------------------------------------------------------
+
 #removing unwanted columns (might have to add FuelSaveSpend)
 data <- raw_data_vehicle %>%
-  select(Year = year, Make = make, Model =model, FuelType1 = fuelType1, FuelType2 = fuelType2, CityMPG = city08, HighMPG = highway08, CombinedMPG = comb08, C02 = co2TailpipeGpm, SuperCharger = sCharger, TurboCharger = tCharger,  FuelConsumption = barrels08, Cylinders = cylinders)
+  select(Year = year, Make = make, Model =model, FuelType1 = fuelType1, FuelType2 = fuelType2, CityMPG = city08, HighMPG = highway08, CombinedMPG = comb08, C02 = co2TailpipeGpm, SuperCharger = sCharger, TurboCharger = tCharger,  FuelConsumption = barrels08, Cylinders = cylinders, Class = VClass)
 
 print('Summary of Data')
 summary(data)
 
 print('Dimension of Data')
 dim(data)
+
+##------------------------------------------------------------------------------
 
 # Convert Categorical variables to Factors
 data <- data %>%
@@ -48,6 +57,8 @@ data <- data %>%
 data$Cylinders <- data$Cylinders %>% replace_na(0)
 
 summary(data)
+
+##------------------------------------------------------------------------------
 
 # Create Frequency Tables for EDA
 df1 <- as.data.frame(table(data$Make)) %>%
@@ -63,26 +74,183 @@ df5 <- as.data.frame(table(data$TurboCharger)) %>%
 df6 <- as.data.frame(table(data$Cylinders)) %>%
   arrange(desc(Freq))
 
+##------------------------------------------------------------------------------
+
 # Boxplots for numerical variables for EDA
 boxplot(data$CombinedMPG, data$CityMPG, data$HighMPG, col = "sky blue" , border = "black")
 
 boxplot(data$C02, col = "sky blue" , border = "black")
 boxplot(data$FuelConsumption, col = "sky blue" , border = "black")
 
-# Remove year 2021 since it may give outliers
-clean_data <- data %>%
+# Remove year 2021 since it may give outliers - for specific questions
+time_data <- data %>%
   filter(Year <2021)
 
-# Combining all the Gasoline Types as one 
-clean_data <- df %>%
-  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Regular Gasoline", replacement = "Gasoline")) %>%
-  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Premium Gasoline", replacement = "Gasoline")) %>%
-  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Midgrade Gasoline", replacement = "Gasoline"))
+##------------------------------------------------------------------------------
 
-clean_data
+# Combining all the Gasoline Types as one 
+clean_data <- data %>%
+  mutate(FuelType1 = str_replace_all(string = FuelType1, pattern = "Regular Gasoline", replacement = "Gasoline")) %>%
+  mutate(FuelType1 = str_replace_all(string = FuelType1, pattern = "Premium Gasoline", replacement = "Gasoline")) %>%
+  mutate(FuelType1 = str_replace_all(string = FuelType1, pattern = "Midgrade Gasoline", replacement = "Gasoline"))
+
+##------------------------------------------------------------------------------
+
+# Comparison Before and After cleaning
+c1 <- unique(data$FuelType1)
+c2 <- unique(clean_data$FuelType1)
+
+comp1 <- data.frame(Unclean = c1, Clean = c(c2,NA,NA))
+comp1
+
+str(clean_data)
+summary(clean_data)
+
+clean_data$FuelType1 <- as.factor(clean_data$FuelType1)
+
+##------------------------------------------------------------------------------
+
+
+
 ```
 
 ```{r}
+# Other EDA charts
+
+##------------------------------------------------------------------------------
+
+# Vehicles and Manufacturers
+
+clean_data %>% 
+  count(Make) %>% 
+  top_n(20, wt = n ) %>% 
+
+   ggplot(aes(x = reorder(Make, n), y = n )) +
+  geom_bar( aes(fill = Make), stat = "identity", show.legend = FALSE) + 
+    labs(title = "Top manufacturers by number of models", y = "Count of models", x = "Make") +
+  coord_flip()
+
+#From the chart we see Chevrolet has 4000 models which cannot be true - identify unique models -EDA
+
+clean_data %>% 
+  count(Make, Model) %>% count(Make) %>% top_n(20, wt = n) %>% 
+  ggplot(aes(x = reorder(Make, n), y = n )) +
+  geom_bar( aes(fill = Make), stat = "identity", show.legend = FALSE) + 
+    labs(title = "Top manufacturers by number of models - adjusted for model year", y = "Count of models", x = "Make") +
+  coord_flip() 
+
+##------------------------------------------------------------------------------
+
+# Trend of Fuel Economy over the years
+
+options(dplyr.summarise.inform = FALSE)
+
+clean_data %>% 
+  group_by(Year) %>% 
+  summarise(avgMPG = mean(CombinedMPG)) %>% 
+  ggplot(aes(x=Year, y = avgMPG)) +
+  geom_line(aes(color = avgMPG), alpha = 0.5, show.legend = FALSE) +
+  geom_point(aes(color = avgMPG), show.legend = FALSE) +
+  scale_x_continuous(breaks =  seq( min(clean_data$Year), max(clean_data$Year), by = 2) ) +
+  scale_color_gradientn(colours=c("red", "blue", "green")) +
+  labs(title = "Average fuel economy over the years", y = "Avg MPG", x = "Year")
+
+##------------------------------------------------------------------------------
+
+# Fuel Economy over the years by fuel type
+
+clean_data %>% 
+  group_by(Year, FuelType1) %>% 
+  summarise(avgMPG = mean(CombinedMPG)) %>% 
+  ggplot(aes(x=Year, y = avgMPG)) +
+  geom_line(aes(color = avgMPG), alpha = 0.7, show.legend = FALSE) +
+  geom_point(aes(color = avgMPG), alpha = 0.5, show.legend = FALSE) +
+  scale_x_continuous(breaks =  seq( min(clean_data$Year), max(clean_data$Year), by = 2) ) +
+  scale_color_gradientn(colours=c("red", "green")) +
+  labs(title = "Average fuel economy over the years by fuel type", y = "Avg MPG", x = "Year") +
+  facet_wrap(~ FuelType1, scales = "free") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), legend.direction = "horizontal", legend.position = "top")
+
+
+
+
+```
+```{r}
+# Research Questions
+
+##------------------------------------------------------------------------------
+
+#Question1 - Comparison of Fuel Efficiency of Gasoline vs Electric Vehicle
+
+unique(clean_data$FuelType1)
+unique(clean_data$FuelType2)
+
+#Combining class - Add in EDA
+
+clean_data <- clean_data %>% 
+  mutate(Class = case_when(str_detect(Class, pattern = "Trucks") ~ "Pickup Trucks",
+                              str_detect(Class, pattern = "Cars|Wagons") ~ "Cars",
+                              str_detect(Class, pattern = "Sport") ~ "SUV",
+                              str_detect(Class, pattern = regex("van", ignore_case = TRUE) ) ~ "Vans", 
+                              TRUE ~ "Other"))
+
+# Highest MPG Gasoline/Hybrid - For 2019
+
+clean_data %>%
+  filter(Year == 2019, FuelType1 == "Gasoline", FuelType2 != "Electricity", Class %in% c("Cars", "SUV")) %>% 
+  group_by(Class) %>% 
+  distinct(Model, .keep_all = TRUE) %>% 
+  top_n(10, wt = CombinedMPG) %>% 
+  ggplot() +
+  geom_point(aes(x = reorder(Model, CombinedMPG), y = CombinedMPG, color = Make), size = 3) +
+  
+  coord_flip() +
+  labs(title ="Highest MPG overall (combined)", x = "Model", y = "MPG") +
+  scale_y_continuous(breaks = seq(30,60, by = 2)) +
+  #scale_color_brewer(palette = "Dark2") +
+  facet_wrap(~ Class, scales ="free")
+
+```
+```{r}
+# Highest MPG Electric Vehicles - not filtered by year
+
+clean_data %>%
+  filter(FuelType1 == "Electricity", Class %in% c("Cars", "SUV")) %>% 
+  group_by(Class) %>% 
+  distinct(Model, .keep_all = TRUE) %>% 
+  top_n(10, wt = CombinedMPG) %>% 
+  ggplot() +
+  geom_point(aes(x = reorder(Model, CombinedMPG), y = CombinedMPG, color = Make), size = 3) +
+  
+  coord_flip() +
+  labs(title ="Highest MPG overall (Electric Vehicles)", x = "Model", y = "MPG") +
+  scale_x_discrete(labels = function(x) abbreviate(x, minlength = 11L))+
+  facet_wrap(~ Class, scales ="free")
+```
+```{r}
+#Worst MPG 
+
+clean_data %>%
+  filter(Year == 2019, FuelType1 == "Gasoline", FuelType2 != "Electricity", Class %in% c("Cars", "SUV")) %>% 
+  group_by(Class) %>% 
+  distinct(Model, .keep_all = TRUE) %>% 
+  top_n(5, wt = -CombinedMPG) %>% 
+  ggplot() +
+  geom_point(aes(x = reorder(Model, CombinedMPG), y = CombinedMPG, color = Make), size = 3) +
+  
+  coord_flip() +
+  labs(title ="Lowest MPG overall (combined)", x = "Model", y = "MPG") +
+  scale_y_continuous(breaks = seq(0,20, by = 2)) +
+  scale_color_brewer(palette = "Dark2") +
+  facet_wrap(~ Class, scales ="free")
+
+## Rolls Royce consistently bad performance
+
+```
+```{r}
+##------------------------------------------------------------------------------
+
+# Question - 
 
 ```
 

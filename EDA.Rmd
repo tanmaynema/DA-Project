@@ -27,7 +27,9 @@ summary(raw_data_vehicle)
 
 ```{r}
 raw_data_vehicle %>%
-  distinct(fuelType2)
+  filter(fuelType1=='Electricity') %>%
+  group_by(year) %>%
+  tally()
 ```
 
 
@@ -35,7 +37,7 @@ raw_data_vehicle %>%
 type_data <- tibble(Year = raw_data_vehicle$year, FuelType1 = raw_data_vehicle$fuelType1, FuelType2 = raw_data_vehicle$fuelType2)
 
 type_data <- type_data %>%
-  mutate(Year = as.numeric(Year))
+  mutate(Year = as.integer(Year))
 
 type_data <- type_data %>%
   mutate(VehicleType = ifelse((FuelType1 == 'Regular Gasoline' | FuelType1 == 'Premium Gasoline' | FuelType1 == 'Midgrade Gasoline') & is.na(FuelType2) , 'Gasoline', ifelse((FuelType1 == 'Regular Gasoline' | FuelType1 == 'Premium Gasoline' | FuelType1 == 'Midgrade Gasoline') & FuelType2 == 'Electricity', 'HEV', ifelse(FuelType1 == 'Electricity', 'BEV', ifelse((FuelType1 == 'Regular Gasoline' | FuelType1 == 'Premium Gasoline' | FuelType1 == 'Midgrade Gasoline') & (FuelType2 == 'E85' | FuelType2 == 'Propane' | FuelType2 == 'Natural Gas'), 'Hybrid', FuelType1)))))
@@ -67,11 +69,113 @@ ggplot(type_plot, aes(x = Year, y = Count, color = VehicleType)) +
 ```
 
 ```{r}
+library(lmtest)
 
+gasoline <- type_plot %>%
+  filter(VehicleType == 'Gasoline')
+
+diesel <- type_plot %>%
+  filter(VehicleType == 'Diesel')
+
+hybrid <- type_plot %>%
+  filter(VehicleType == 'Hybrid')
+
+bev <- type_plot %>%
+  filter(VehicleType == 'BEV')
+
+hev <- type_plot %>%
+  filter(VehicleType == 'HEV')
+
+cng <- type_plot %>%
+  filter(VehicleType == 'CNG')
+
+simple.fit_gasoline <- lm(Year~Count, data=gasoline)
+#simple.fit_diesel = lm(Year~Count, data=diesel)
+#simple.fit_hybrid = lm(Year~Count, data=hybrid)
+#simple.fit_cng = lm(Year~Count, data=cng)
+simple.fit_bev <- lm(Year~Count, data=bev)
+simple.fit_hev <- lm(Year~Count, data=hev)
+
+
+summary(simple.fit_gasoline)
+#summary(simple.fit_diesel)
+#summary(simple.fit_cng)
+#summary(simple.fit_hybrid)
+summary(simple.fit_bev)
+summary(simple.fit_hev)
+```
+
+```{r}
+ggplot(data = gasoline, aes(x = Year, y = Count)) +
+geom_point() +
+stat_smooth(method = "lm", col = "dodgerblue3") +
+theme(panel.background = element_rect(fill = "white"),
+axis.line.x=element_line(),
+axis.line.y=element_line()) +
+ggtitle("Linear Model Fitted to Data")
+
+ggplot(data = bev, aes(x = Year, y = Count)) +
+geom_point() +
+stat_smooth(method = "lm", col = "dodgerblue3") +
+theme(panel.background = element_rect(fill = "white"),
+axis.line.x=element_line(),
+axis.line.y=element_line()) +
+ggtitle("Linear Model Fitted to Data")
+
+ggplot(data = hev, aes(x = Year, y = Count)) +
+geom_point() +
+stat_smooth(method = "lm", col = "dodgerblue3") +
+theme(panel.background = element_rect(fill = "white"),
+axis.line.x=element_line(),
+axis.line.y=element_line()) +
+ggtitle("Linear Model Fitted to Data")
+```
+```{r}
+simple.fit_gasoline
+#predict.lm(simple.fit_gasoline, tibble(Year = 2030))
+anova(simple.fit_gasoline)
+```
+
+```{r}
+gas <- ts(gasoline$Count, frequency = 1, start = 1984)
+plot(gas)
+autoarima_gas <- auto.arima(gas)
+gas_forecast <- forecast(autoarima_gas, h=30)
+gas_count_forecast <- plot(gas_forecast, main = "MPG Forecast for Gasoline", xlab = "Years", ylab = "Count of Vehicles")
+
+bev <- bev %>%
+  filter(Year >= 2011)
+
+bev_new <- ts(bev$Count, frequency = 1, start = 2011)
+plot(bev_new)
+autoarima_bev <- auto.arima(bev_new)
+bev_forecast <- forecast(autoarima_bev, h=30)
+bev_count_forecast <- plot(bev_forecast, main = "MPG Forecast for BEV", xlab = "Years", ylab = "Count of Vehicles")
+
+hev_new <- ts(hev$Count, frequency = 1, start = 2011)
+plot(hev_new)
+autoarima_hev <- auto.arima(hev_new)
+hev_forecast <- forecast(autoarima_hev, h=30)
+hev_count_forecast <- plot(hev_forecast, main = "MPG Forecast for HEV", xlab = "Years", ylab = "Count of Vehicles")
 ```
 
 
+```{r}
+p <- ggplot() + 
+  geom_line(data=gasoline, aes(x=Year, y = Count)) + 
+  geom_line(dta=gas_forecast,aes(x=Year, y = 'Point Forecast') )
+  geom_line(data=bev, aes(x=Year,y=Count)) + 
+  geom_line(data=hev, aes(x=Year, Count)) +
+  scale_y_log10()
 
+p
+```
+```{r}
+hev_forecast
+```
+
+
+BEV inconsistent between 2003-2008. 
 ```{r}
 make_data <- tibble(Make = raw_data_vehicle$make, Model = raw_data_vehicle$model, Year = raw_data_vehicle$year, CO2 = raw_data_vehicle$co2TailpipeGpm, MPG = raw_data_vehicle$comb08, Fuel_Consumption = raw_data_vehicle$barrels08)
 
