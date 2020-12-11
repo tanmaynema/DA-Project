@@ -1,0 +1,217 @@
+---
+title: "project"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("tidyverse")
+library(tidyverse)
+install.packages("ggpubr")
+library("ggpubr")
+```
+
+```{r}
+data <- read.csv('vehicles.csv')
+summary(data)
+ft2 <- data$fuelType2
+
+unique(data$fuelType2)
+
+
+#summary before data cleaning
+summary(data)
+#removing unwanted columns
+df = subset(data, select = -c(charge120,city08U,cityA08U,highwayA08U,highway08U,eng_dscr,UCity,UCityA,UHighway,UHighwayA,createdOn,modifiedOn))
+#summary(df)
+
+#remove year 2021
+
+#combining all the Gasoline Types - Now Gasoline vehicles are those where fuelType1 = Gasoline
+clean_data <- df %>%
+  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Regular Gasoline", replacement = "Gasoline")) %>%
+  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Premium Gasoline", replacement = "Gasoline")) %>%
+  mutate(fuelType1 = str_replace_all(string = fuelType1, pattern = "Midgrade Gasoline", replacement = "Gasoline"))
+
+clean_data
+```
+
+```{r}
+#correlation between CityMPG and HighwayMPG
+#city08 - city MPG for fuelType1
+#cityA08 - city MPG for fuelType2 
+#highway08 - highway MPG for fuelType1
+#highwayA08 - highway MPG for fuelType2
+#http://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r 
+
+#first do it for fuel type 1 GASOLINE i.e. city08 vs highway08 + for make TOYOTA
+gasoline_mpg <- filter(clean_data, fuelType1 == "Gasoline", make == "Toyota" )
+
+#visualizing the data
+ggscatter(gasoline_mpg, x = "city08", y = "highway08", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "City MPG", ylab = "Highway MPG")
+#we see the relationship is linear
+
+#checking if the data is normally distributed - error: sample size not enough
+# Shapiro-Wilk normality test for City mpg
+#shapiro.test(df$city08) 
+# Shapiro-Wilk normality test for highway mpg
+#shapiro.test(df$highway08)
+
+#visual inspection for normality - QQPlot
+# city mpg
+ggqqplot(gasoline_mpg$city08, ylab = "city mpg")
+# highway mpg
+ggqqplot(gasoline_mpg$highway08, ylab = "highway mpg")
+
+#the plots do not show normality - we will use Spearman and Kendall correlation
+#Kendall's test
+res2 <- cor.test(gasoline_mpg$city08, gasoline_mpg$highway08,  method="kendall")
+res2
+
+#tau value is close to 1 hence there is a strong positive correlation = 0.86
+
+#Spearman's test
+res3 <-cor.test(gasoline_mpg$city08, gasoline_mpg$highway08,  method = "spearman")
+res3
+
+#rho value is close to 1 hence there is a strong positive correlation = 0.95
+```
+```{r}
+#Now do it for fuel type 1 ELECTRICITY i.e. city08 vs highway08 for TESLA
+#http://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r
+
+EV_mpg <- filter(clean_data, fuelType1 == "Electricity", make == "Tesla")
+
+#visualizing the data
+ggscatter(EV_mpg, x = "city08", y = "highway08", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "City MPG", ylab = "Highway MPG")
+#we see the relationship is linear
+
+#checking if the data is normally distributed - error: sample size not enough
+# Shapiro-Wilk normality test for City mpg
+#shapiro.test(df$city08) 
+# Shapiro-Wilk normality test for highway mpg
+#shapiro.test(df$highway08)
+
+#visual inspection for normality - QQPlot
+# city mpg
+ggqqplot(EV_mpg$city08, ylab = "city mpg")
+# highway mpg
+ggqqplot(EV_mpg$highway08, ylab = "highway mpg")
+
+#from the plots we can say that both populations come from normal distributions - we use Pearson Correlation
+
+res <- cor.test(EV_mpg$city08, EV_mpg$highway08, method = "pearson")
+res
+
+#since p value is less than the significance level alpha = 0.05, city and highway mpg are 
+#significantly correlated with a strong positive correlation 
+```
+```{r}
+# #Toyota-Tesla City Comparison
+# 
+# toyota_city <- filter(clean_data, fuelType1 == "Gasoline", make == "Toyota")
+# tesla_city <-  filter(clean_data, fuelType1 == "Electricity", make == "Tesla")
+# 
+# toyota_city_col <- toyota_city$city08
+# tesla_city_col <- tesla_city$city08
+# 
+# new_data <- data.frame(toyota_city_col , tesla_city_col)
+# 
+# #visualizing the data
+# ggscatter(new_data, x = "toyota_city_col", y = "tesla_city_col", 
+#           add = "reg.line", conf.int = TRUE, 
+#           cor.coef = TRUE, cor.method = "pearson",
+#           xlab = "City MPG Toyota", ylab = "City MPG Tesla")
+# #we see the relationship is linear
+# 
+# #checking if the data is normally distributed - error: sample size not enough
+# # Shapiro-Wilk normality test for City mpg
+# #shapiro.test(df$city08) 
+# # Shapiro-Wilk normality test for highway mpg
+# #shapiro.test(df$highway08)
+# 
+# #visual inspection for normality - QQPlot
+# # city mpg
+# ggqqplot(EV_mpg$city08, ylab = "city mpg")
+# # highway mpg
+# ggqqplot(EV_mpg$highway08, ylab = "highway mpg")
+
+
+```
+
+```{r}
+#F-Test and T-test on the ratio of City MPG and Highway MPG 
+#http://www.sthda.com/english/wiki/unpaired-two-samples-t-test-in-r
+
+gasoline_mpg <- filter(clean_data, fuelType1 == "Gasoline", make == "Toyota" )
+gasoline_mpg$ratio <- gasoline_mpg$city08 / gasoline_mpg$highway08
+
+
+EV_mpg <- filter(clean_data, fuelType1 == "Electricity", make == "Tesla")
+EV_mpg$ratio <- EV_mpg$city08 / EV_mpg$highway08
+
+head(gasoline_mpg)
+head(EV_mpg)
+
+gas_ratio <- gasoline_mpg$ratio
+gas_ratio <- sample(gas_ratio,100,replace=FALSE)
+#gas_ratio <- head(gas_ratio, 100)
+EV_ratio <- EV_mpg$ratio
+EV_ratio <- head(EV_ratio, 100)
+
+# Create a new data frame
+my_data <- data.frame( 
+                group = rep(c("gas_ratio", "EV_ratio"), each = 100),
+                ratio = c(gas_ratio,  EV_ratio)
+                )
+library(dplyr)
+
+#summary stats
+
+group_by(my_data, group) %>%
+  summarise(
+    count = n(),
+    mean = mean(ratio, na.rm = TRUE),
+    sd = sd(ratio, na.rm = TRUE)
+  )
+
+library(ggpubr)
+
+ggboxplot(my_data, x = "group", y = "ratio", 
+          color = "group", palette = c("#00AFBB", "#E7B800"),
+        ylab = "Ratio", xlab = "Groups")
+
+#normality test
+
+# Shapiro-Wilk normality test for Men's weights
+with(my_data, shapiro.test(ratio[group == "gas_ratio"]))# p = 0.0001937
+# Shapiro-Wilk normality test for Women's weights
+with(my_data, shapiro.test(ratio[group == "EV_ratio"])) # p = 0.0001738
+
+# not normal since p val less than 0.05
+
+# F test - do they have same variances?
+
+res.ftest <- var.test(ratio ~ group, data = my_data)
+res.ftest
+
+#The p-value of F-test is p = 0.2628. It’s greater than the significance level alpha = 0.05. In conclusion, there is no significant difference between the variances of the two sets of data. Therefore, we can use the classic t-test which assume equality of the two variances.
+
+#T - test
+
+#Is there a significant difference between gasoline and EV mpg ratios?
+
+res <- t.test(ratio ~ group, data = my_data, var.equal = TRUE)
+res
+
+#p value is less than 0.05 hence we conclude the two ratios are significantly different
+```
+

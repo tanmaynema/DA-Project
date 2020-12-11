@@ -1,6 +1,7 @@
 ---
-title: "12709 - Project"
-author: "Tanmay Nema"
+Purpose: "12709 - Data Analytics Project"
+Title: "Analysis, Modeling and Predictions of Fuel Economy Dataset"
+author: "Simran Bhalla, Tanmay Nema, Gautam Petkar"
 date: "12/8/2020"
 output: html_document
 ---
@@ -9,46 +10,69 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Title: "Analysis, Modeling and Predictions of Fuel Economy Dataset"
+### "Simran Bhalla, Tanmay Nema, Gautam Petkar"
+
+## Introduction
+
+_### Objective_
+The objective of this analysis is to explore the underlying trends and track the changes in the transportation sector for passenger vehicles, with specific emphasis on fuel efficiency and carbon emissions.
+
+_### Dataset_
+The dataset chosen for the project has been taken from [fueleconomy.gov](https://www.fueleconomy.gov/feg/ws/index.shtml#vehicle) which is the official U.S. government source for fuel economy information. The website helps consumers make informed fuel economy choices before choosing a vehicle to purchase and helps them achieve the best fuel economy possible from the cars they own. This website is maintained by the U.S. Department of Energy’s (DOE’s) Office of Energy Efficiency and Renewable Energy with data being provided by the U.S. Environment Protection Agency (EPA). The website also helps in fulfilling the DOE’s and EPA's responsibility under the Energy Policy Act of 1992 to provide accurate fuel economy information to consumers. On the website it is possible to find and compare cars by model, make or class and it also shows the best and worst vehicles as well as the most viewed vehicles daily.  
+
+The purpose of EPA’s fuel economy estimates is to provide a reliable basis for comparing vehicles. Some of the key parameters that the dataset consists are miles-per-gallon information for different use-case such as city application, highway application and combined application (55% city – 45% highway), tailpipe CO2 emissions, fuel consumption, cost savings, etc. Estimates for all vehicles are based on laboratory testing under standardized conditions to allow for fair comparisons. The vehicle classes used for comparison are two-seater cars, sedans, station wagons, pickup trucks, vans, minivans, SUVs, etc.  
+
+For this project, the vehicle dataset which is available on the website is used. It contains fuel economy information for 1984-current model year vehicles. The data is available for download in CSV and XML formats.  
+
+_### Data Dictionary_
+The data dictionary was available on the website and is shown in Appendix-A.  
+
+_### Choice of Tool Used_ 
+To be able to successfully complete our analysis we make use of Microsoft Excel and R. The dataset is available in .csv format and we perform an initial exploratory data analysis using Microsoft Excel. This helps us understand the variables we want to use and gives us an initial idea of the research questions we can propose. Excel makes it easier to look at the data at one go and add filters to the variables. By filtering the data, we also get an idea of null values which further assist in the process of data cleaning.  
+After looking at the data using Microsoft Excel, we perform our Exploratory Data Analysis and Data Manipulation using R programming language on RStudio software package. The summary() and the str () function make it easy to look at the type of data in the variable as well as the minimum, maximum, median and mean values of the variables in the dataset. We went ahead with R for the bulk of our analysis since it offers the flexibility of installing additional packages to carry out advanced analysis and modeling using statistical and machine learning models.  
+Further, we used git interfaced with RStudio to facilitate version control and enable coding collaboration between the group members.  
+For the statistical analysis and modelling of our research questions we use the tools and packages in R such as - *add tools and used for each research question*.
+
 ```{r}
+# Libraries used
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
 library(gridExtra)
 library(stringr)
-
-#library simran
 library(ggpubr)
-
-
+library(rstatix)
+library(forecast)
+library(lmtest)
 ```
 
+## Exploratory Data Analysis - Data Cleaning - Data Manipulation
 
+The structure and summary of the raw dataset is displayed below:
 
 ```{r}
-
 # Import data from csv and save in a data frame
 holder <- read.csv("vehicles.csv")
 raw_data_vehicle <- tibble(holder)
 
-#summary before data cleaning
-head(raw_data_vehicle)
-str(raw_data_vehicle)
-summary(raw_data_vehicle)
+#Dimesion of the raw dataset:
+dim(raw_data_vehicle)
+```
 
+```{r}
 ##------------------------------------------------------------------------------
 
-#removing unwanted columns (might have to add FuelSaveSpend)
+# Calculation of volume of vehicle (parameter used in further analysis)
+vols <- raw_data_vehicle %>%
+  select(hpv,lv4, pv4, pv2,lv2, hlv)
+vols <- rowSums(vols)
+
+#removing unwanted columns
 data <- raw_data_vehicle %>%
-  select(Year = year, Make = make, Model =model, FuelType1 = fuelType1, FuelType2 = fuelType2, CityMPG = city08, HighMPG = highway08, CombinedMPG = comb08, C02 = co2TailpipeGpm, SuperCharger = sCharger, TurboCharger = tCharger,  FuelConsumption = barrels08, Cylinders = cylinders, Class = VClass)
-
-print('Summary of Data')
-summary(data)
-
-print('Dimension of Data')
-dim(data)
-
+  select(Year = year, Make = make, Model =model, FuelType1 = fuelType1, FuelType2 = fuelType2, CityMPG = city08, HighMPG = highway08, CombinedMPG = comb08, C02 = co2TailpipeGpm, SuperCharger = sCharger, TurboCharger = tCharger,  FuelConsumption = barrels08, Cylinders = cylinders, Class = VClass, EngineDisplacement = displ) %>%
+  mutate(VehicleVolume = vols)
 ##------------------------------------------------------------------------------
-
 # Convert Categorical variables to Factors
 data <- data %>%
   mutate(Make = as.factor(Make), Model = as.factor(Model), FuelType1 = as.factor(FuelType1), FuelType2 = as.factor(FuelType2), SuperCharger = as.factor(SuperCharger), TurboCharger = as.factor(TurboCharger))
@@ -57,9 +81,8 @@ data <- data %>%
 data$Cylinders <- data$Cylinders %>% replace_na(0)
 
 summary(data)
-
+str(data)
 ##------------------------------------------------------------------------------
-
 # Create Frequency Tables for EDA
 df1 <- as.data.frame(table(data$Make)) %>%
   arrange(desc(Freq))
@@ -73,20 +96,37 @@ df5 <- as.data.frame(table(data$TurboCharger)) %>%
   arrange(desc(Freq))
 df6 <- as.data.frame(table(data$Cylinders)) %>%
   arrange(desc(Freq))
-
 ##------------------------------------------------------------------------------
-
 # Boxplots for numerical variables for EDA
-boxplot(data$CombinedMPG, data$CityMPG, data$HighMPG, col = "sky blue" , border = "black")
+boxplot(data$CombinedMPG, data$CityMPG, data$HighMPG,
+        main = "Spread of MPG attributes",
+        at = c(1,3,5),
+        names = c("Combined MPG", "City MPG", "Highway MPG"),
+        col = c("orange","red"),
+        border = "brown",
+        horizontal = TRUE,
+        notch = TRUE)
 
-boxplot(data$C02, col = "sky blue" , border = "black")
-boxplot(data$FuelConsumption, col = "sky blue" , border = "black")
+boxplot(data$C02,
+        main = "Spread of Tailpipe Emission (g/mile)",
+        at = c(1),
+        names = c("CO2"),
+        col = c("orange","red"),
+        border = "brown",
+        horizontal = TRUE,
+        notch = TRUE)
 
-# Remove year 2021 since it may give outliers - for specific questions
-time_data <- data %>%
-  filter(Year <2021)
-
+boxplot(data$FuelConsumption,
+        main = "Spread of Fuel Consumption (Barrels)",
+        at = c(1),
+        names = c("Fuel Consumption"),
+        col = c("orange","red"),
+        border = "brown",
+        horizontal = TRUE,
+        notch = TRUE)
 ##------------------------------------------------------------------------------
+
+## Data Cleaning: 
 
 # Combining all the Gasoline Types as one 
 clean_data <- data %>%
@@ -94,25 +134,31 @@ clean_data <- data %>%
   mutate(FuelType1 = str_replace_all(string = FuelType1, pattern = "Premium Gasoline", replacement = "Gasoline")) %>%
   mutate(FuelType1 = str_replace_all(string = FuelType1, pattern = "Midgrade Gasoline", replacement = "Gasoline"))
 
+#Combining class
+clean_data <- clean_data %>% 
+  mutate(Class = case_when(str_detect(Class, pattern = "Trucks") ~ "Pickup Trucks",
+                              str_detect(Class, pattern = "Cars|Wagons") ~ "Cars",
+                              str_detect(Class, pattern = "Sport") ~ "SUV",
+                              str_detect(Class, pattern = regex("van", ignore_case = TRUE) ) ~ "Vans", 
+                              TRUE ~ "Other"))
 ##------------------------------------------------------------------------------
 
 # Comparison Before and After cleaning
 c1 <- unique(data$FuelType1)
 c2 <- unique(clean_data$FuelType1)
-
 comp1 <- data.frame(Unclean = c1, Clean = c(c2,NA,NA))
-comp1
 
+print("Comparison of Data Before and After cleaning")
+comp1
 str(clean_data)
 summary(clean_data)
 
+#Specifying Categorical Variable as Factor
 clean_data$FuelType1 <- as.factor(clean_data$FuelType1)
 
 ##------------------------------------------------------------------------------
-
-
-
 ```
+
 
 ```{r}
 # Other EDA charts
@@ -120,45 +166,16 @@ clean_data$FuelType1 <- as.factor(clean_data$FuelType1)
 ##------------------------------------------------------------------------------
 
 # Vehicles and Manufacturers
-
-clean_data %>% 
-  count(Make) %>% 
-  top_n(20, wt = n ) %>% 
-
-   ggplot(aes(x = reorder(Make, n), y = n )) +
-  geom_bar( aes(fill = Make), stat = "identity", show.legend = FALSE) + 
-    labs(title = "Top manufacturers by number of models", y = "Count of models", x = "Make") +
-  coord_flip()
-
-#From the chart we see Chevrolet has 4000 models which cannot be true - identify unique models -EDA
-
 clean_data %>% 
   count(Make, Model) %>% count(Make) %>% top_n(20, wt = n) %>% 
   ggplot(aes(x = reorder(Make, n), y = n )) +
   geom_bar( aes(fill = Make), stat = "identity", show.legend = FALSE) + 
-    labs(title = "Top manufacturers by number of models - adjusted for model year", y = "Count of models", x = "Make") +
+    labs(title = "Top manufacturers by number of models", y = "Count of models", x = "Make") +
   coord_flip() 
 
 ##------------------------------------------------------------------------------
 
-# Trend of Fuel Economy over the years
-
-options(dplyr.summarise.inform = FALSE)
-
-clean_data %>% 
-  group_by(Year) %>% 
-  summarise(avgMPG = mean(CombinedMPG)) %>% 
-  ggplot(aes(x=Year, y = avgMPG)) +
-  geom_line(aes(color = avgMPG), alpha = 0.5, show.legend = FALSE) +
-  geom_point(aes(color = avgMPG), show.legend = FALSE) +
-  scale_x_continuous(breaks =  seq( min(clean_data$Year), max(clean_data$Year), by = 2) ) +
-  scale_color_gradientn(colours=c("red", "blue", "green")) +
-  labs(title = "Average fuel economy over the years", y = "Avg MPG", x = "Year")
-
-##------------------------------------------------------------------------------
-
 # Fuel Economy over the years by fuel type
-
 clean_data %>% 
   group_by(Year, FuelType1) %>% 
   summarise(avgMPG = mean(CombinedMPG)) %>% 
@@ -166,91 +183,278 @@ clean_data %>%
   geom_line(aes(color = avgMPG), alpha = 0.7, show.legend = FALSE) +
   geom_point(aes(color = avgMPG), alpha = 0.5, show.legend = FALSE) +
   scale_x_continuous(breaks =  seq( min(clean_data$Year), max(clean_data$Year), by = 2) ) +
-  scale_color_gradientn(colours=c("red", "green")) +
-  labs(title = "Average fuel economy over the years by fuel type", y = "Avg MPG", x = "Year") +
+  labs(title = "Average Fuel Economy by Fuel Type", y = "Avg MPG", x = "Year") +
   facet_wrap(~ FuelType1, scales = "free") +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), legend.direction = "horizontal", legend.position = "top")
-
-
-
-
 ```
+
+## Research Questions
+
+### Question 1: Are vehicle with Supercharger more fuel efficient than vehicle with Turbochargers?
+### (Inferential question - T-test)
 ```{r}
-# Research Questions
+vehicles_SCTC <- clean_data %>% 
+  filter(SuperCharger == 'S' | TurboCharger == 'TRUE') %>%
+  mutate(Charger = if_else(SuperCharger == 'S','SC','TC',missing = NULL))
 
-##------------------------------------------------------------------------------
+vehicles_SCTC %>%
+  group_by(TurboCharger, SuperCharger) %>%
+  summarise(n = n(), mean = mean(CombinedMPG), median = median(CombinedMPG), sd = sd(CombinedMPG))
 
-#Question1 - Comparison of Fuel Efficiency of Gasoline vs Electric Vehicle
+tc <- vehicles_SCTC %>%
+  filter(TurboCharger == 'TRUE' & !SuperCharger == 'S')
 
-unique(clean_data$FuelType1)
-unique(clean_data$FuelType2)
+sc <- vehicles_SCTC %>%
+  filter(SuperCharger == 'S' & is.na(TurboCharger))
 
-#Combining class - Add in EDA
+tcsc <- vehicles_SCTC %>%
+  filter(SuperCharger == 'S' & TurboCharger == 'TRUE')
 
-clean_data <- clean_data %>% 
-  mutate(Class = case_when(str_detect(Class, pattern = "Trucks") ~ "Pickup Trucks",
-                              str_detect(Class, pattern = "Cars|Wagons") ~ "Cars",
-                              str_detect(Class, pattern = "Sport") ~ "SUV",
-                              str_detect(Class, pattern = regex("van", ignore_case = TRUE) ) ~ "Vans", 
-                              TRUE ~ "Other"))
+boxplot(tc$CombinedMPG, sc$CombinedMPG, tcsc$CombinedMPG,
+main = "Comparison Between Turbocharger and Supercharger Vehicles",
+at = c(1,3,5),
+names = c("Turbocharger", "Supercharger", "Dual"),
+las = 2,
+col = c("orange","red"),
+border = "brown",
+horizontal = TRUE,
+notch = TRUE
+)
 
-# Highest MPG Gasoline/Hybrid - For 2019
+# To verify data is normally distributed
+ggplot(vehicles_SCTC, aes(x=CombinedMPG)) +
+    geom_histogram(binwidth=2, colour="black", fill="white")
+
+# T-Test on TC/SC set:
+stat.test <- t.test(vehicles_SCTC$CombinedMPG ~ vehicles_SCTC$Charger, var.equal = FALSE) %>% add_significance()
+stat.test
+```
+### Question 2: Is there a difference in fuel economy b/w different vehicle classes?
+### (Inferential question - ANOVA)
+```{r}
 
 clean_data %>%
-  filter(Year == 2019, FuelType1 == "Gasoline", FuelType2 != "Electricity", Class %in% c("Cars", "SUV")) %>% 
-  group_by(Class) %>% 
-  distinct(Model, .keep_all = TRUE) %>% 
-  top_n(10, wt = CombinedMPG) %>% 
-  ggplot() +
-  geom_point(aes(x = reorder(Model, CombinedMPG), y = CombinedMPG, color = Make), size = 3) +
-  
-  coord_flip() +
-  labs(title ="Highest MPG overall (combined)", x = "Model", y = "MPG") +
-  scale_y_continuous(breaks = seq(30,60, by = 2)) +
-  #scale_color_brewer(palette = "Dark2") +
-  facet_wrap(~ Class, scales ="free")
+  distinct(Class)
+
+vehicles_class <- clean_data %>% 
+  filter(!is.na(Class)) %>%
+  filter(FuelType1 == 'Gasoline' , FuelType2 != "Electricity")
+
+vehicles_class %>%
+  group_by(Class) %>%
+  summarise(n = n(), mean = mean(CombinedMPG), median = median(CombinedMPG), sd = sd(CombinedMPG))
+
+boxplot(vehicles_class$CombinedMPG ~ vehicles_class$Class,
+main = "Comparison Between Vehicle Class",
+las = 2,
+col = c("orange","red"),
+border = "brown",
+horizontal = TRUE,
+notch = TRUE,
+xlab = '',
+ylab = '')
+
+# To verify data is normally distributed
+ggplot(vehicles_class, aes(x=CombinedMPG)) +
+    geom_histogram(binwidth=2, colour="black", fill="white")
+
+# ANOVA Statistical Test
+fit_class <- lm(CombinedMPG ~ as.factor(Class), data = vehicles_class)
+anova(fit_class)
 
 ```
+### Question 3: Is there a correlation between Engine Displacement and Vehicle Volume?
+### (Inferential question - Correlation)
 ```{r}
-# Highest MPG Electric Vehicles - not filtered by year
 
-clean_data %>%
-  filter(FuelType1 == "Electricity", Class %in% c("Cars", "SUV")) %>% 
-  group_by(Class) %>% 
-  distinct(Model, .keep_all = TRUE) %>% 
-  top_n(10, wt = CombinedMPG) %>% 
-  ggplot() +
-  geom_point(aes(x = reorder(Model, CombinedMPG), y = CombinedMPG, color = Make), size = 3) +
-  
-  coord_flip() +
-  labs(title ="Highest MPG overall (Electric Vehicles)", x = "Model", y = "MPG") +
-  scale_x_discrete(labels = function(x) abbreviate(x, minlength = 11L))+
-  facet_wrap(~ Class, scales ="free")
+correlation_data <- clean_data %>% 
+  filter(FuelType1 != 'Electricity') %>%
+  filter(!is.na(EngineDisplacement)) %>%
+  filter(VehicleVolume > 20 & VehicleVolume < 230)
+
+correlation_data %>%
+  summarise(n = n(), mean = mean(VehicleVolume), median = median(VehicleVolume), sd = sd(VehicleVolume))
+
+boxplot(correlation_data$VehicleVolume,
+main = "Spread of Vehicle Volume (cubic ft)",
+las = 1,
+col = c("orange","red"),
+border = "brown",
+horizontal = TRUE,
+notch = TRUE
+)
+
+# To verify data is normally distributed
+ggplot(correlation_data, aes(x=EngineDisplacement)) +
+    geom_histogram(binwidth=0.2, colour="black", fill="white")
+
+ggplot(correlation_data, aes(x=VehicleVolume)) +
+    geom_histogram(binwidth=2, colour="black", fill="white")
+
+# Correlation Test - (not normally distributed data)
+res_corr <- cor.test(correlation_data$EngineDisplacement, correlation_data$VehicleVolume, method = "kendall")
+res_corr
+
+ggscatter(correlation_data, x = "EngineDisplacement", y = "VehicleVolume", color = "VehicleVolume",
+          title = "Correlation between Engine Displacement and Vehicle Volume",
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = FALSE, cor.method = "kendall",
+          xlab = "Engine Displacement", ylab = "Vehicle Volume",
+          add.params = list(color = "red", fill = "lightgray")) + 
+          stat_cor(method = "kendall", label.x = 3, label.y = 30)
+
 ```
+
+### Question 4: What is the trend of CO2 emission by year for top 5 vehicle manufacturers?
+### (Predictive question - Correlation)
 ```{r}
-#Worst MPG 
+new_df <- data.frame(vehicles.comb08 = raw_data_vehicle$comb08, vehicles.co2TailpipeGpm = raw_data_vehicle$co2TailpipeGpm, vehicles.year = raw_data_vehicle$year, vehicles.fuelType1 = raw_data_vehicle$fuelType1, vehicles.make = raw_data_vehicle$make)
 
-clean_data %>%
-  filter(Year == 2019, FuelType1 == "Gasoline", FuelType2 != "Electricity", Class %in% c("Cars", "SUV")) %>% 
-  group_by(Class) %>% 
-  distinct(Model, .keep_all = TRUE) %>% 
-  top_n(5, wt = -CombinedMPG) %>% 
-  ggplot() +
-  geom_point(aes(x = reorder(Model, CombinedMPG), y = CombinedMPG, color = Make), size = 3) +
-  
-  coord_flip() +
-  labs(title ="Lowest MPG overall (combined)", x = "Model", y = "MPG") +
-  scale_y_continuous(breaks = seq(0,20, by = 2)) +
-  scale_color_brewer(palette = "Dark2") +
-  facet_wrap(~ Class, scales ="free")
+#Consider only IC engine vehicles
+IC_veh <- filter(new_df, vehicles.fuelType1 != "Electricity")
 
-## Rolls Royce consistently bad performance
+#Consider Companies with highest vehicle count (Top 5)
 
+#Chevy
+chevy <- filter(IC_veh, vehicles.make == "Chevrolet")
+chevy_avg_co2 <- aggregate(cbind(chevy$vehicles.co2TailpipeGpm)~chevy$vehicles.year, FUN = mean)
+ts_chevy_co2 <- ts(chevy_avg_co2$V1, frequency = 1, start = 1984)
+autoarima_chevy_co2 <- auto.arima(ts_chevy_co2)
+chevy_forecast_co2 <- forecast(autoarima_chevy_co2, h=10)
+chevy_co2_forecast <- plot(chevy_forecast_co2, main = "Tailpipe CO2 Emissions Forecast for Chevrolet", xlab = "Years", ylab = "Avg. CO2 Emissions (g/miles)")
+
+#Ford
+ford <- filter(IC_veh, vehicles.make == "Ford")
+ford_avg_co2 <- aggregate(cbind(ford$vehicles.co2TailpipeGpm)~ford$vehicles.year, FUN = mean)
+ts_ford_co2 <- ts(ford_avg_co2$V1, frequency = 1, start = 1984)
+autoarima_ford_co2 <- auto.arima(ts_ford_co2)
+ford_forecast_co2 <- forecast(autoarima_ford_co2, h=10)
+ford_co2_forecast <- plot(ford_forecast_co2, main = "Tailpipe CO2 Emissions Forecast for Ford", xlab = "Years", ylab = "Avg. CO2 Emissions (g/miles)")
+
+#Dodge
+dodge <- filter(IC_veh, vehicles.make == "Dodge")
+dodge_avg_co2 <- aggregate(cbind(dodge$vehicles.co2TailpipeGpm)~dodge$vehicles.year, FUN = mean)
+ts_dodge_co2 <- ts(dodge_avg_co2$V1, frequency = 1, start = 1984)
+autoarima_dodge_co2 <- auto.arima(ts_dodge_co2)
+dodge_forecast_co2 <- forecast(autoarima_dodge_co2, h=10)
+dodge_co2_forecast <- plot(dodge_forecast_co2, main = "Tailpipe CO2 Emissions Forecast for Dodge", xlab = "Years", ylab = "Avg. CO2 Emissions (g/miles)")
+
+#GMC
+gmc <- filter(IC_veh, vehicles.make == "GMC")
+gmc_avg_co2 <- aggregate(cbind(gmc$vehicles.co2TailpipeGpm)~gmc$vehicles.year, FUN = mean)
+ts_gmc_co2 <- ts(gmc_avg_co2$V1, frequency = 1, start = 1984)
+autoarima_gmc_co2 <- auto.arima(ts_gmc_co2)
+gmc_forecast_co2 <- forecast(autoarima_gmc_co2, h=10)
+gmc_co2_forecast <- plot(gmc_forecast_co2, main = "Tailpipe CO2 Emissions Forecast for GMC", xlab = "Years", ylab = "Avg. CO2 Emissions (g/miles)")
+
+#Toyota
+toyota <- filter(IC_veh, vehicles.make == "Toyota")
+toyota_avg_co2 <- aggregate(cbind(toyota$vehicles.co2TailpipeGpm)~toyota$vehicles.year, FUN = mean)
+ts_toyota_co2 <- ts(toyota_avg_co2$V1, frequency = 1, start = 1984)
+autoarima_toyota_co2 <- auto.arima(ts_toyota_co2)
+toyota_forecast_co2 <- forecast(autoarima_toyota_co2, h=10)
+toyota_co2_forecast <- plot(toyota_forecast_co2, main = "Tailpipe CO2 Emissions Forecast for Toyota", xlab = "Years", ylab = "Avg. CO2 Emissions (g/miles)")
 ```
+### Question 5: Is there a difference in the City MPG and Highway MPG values for Gasoline vs EVs?
+### (Inferential question - F-test, T-test)
 ```{r}
-##------------------------------------------------------------------------------
+#F-Test and T-test on the ratio of City MPG and Highway MPG 
+#http://www.sthda.com/english/wiki/unpaired-two-samples-t-test-in-r
 
-# Question - 
+gasoline_mpg <- filter(clean_data, FuelType1 == "Gasoline", Make == "Toyota" )
+gasoline_mpg$ratio <- gasoline_mpg$CityMPG / gasoline_mpg$HighMPG
+EV_mpg <- filter(clean_data, FuelType1 == "Electricity", Make == "Tesla")
+EV_mpg$ratio <- EV_mpg$CityMPG / EV_mpg$HighMPG
+gas_ratio <- gasoline_mpg$ratio
+gas_ratio <- sample(gas_ratio,100,replace=FALSE)
+EV_ratio <- EV_mpg$ratio
+EV_ratio <- head(EV_ratio, 100)
+
+# Create a new data frame
+my_data <- data.frame( 
+                group = rep(c("gas_ratio", "EV_ratio"), each = 100),
+                ratio = c(gas_ratio,  EV_ratio)
+                )
+
+# Summary stats
+group_by(my_data, group) %>%
+  summarise(
+    count = n(),
+    mean = mean(ratio, na.rm = TRUE),
+    sd = sd(ratio, na.rm = TRUE)
+  )
+
+ggboxplot(my_data, x = "group", y = "ratio", 
+          color = "Brown", fill = "Orange",
+          title = "City vs Highway MPG Ratio for Gasoline vs EVs",
+          orientation = "horizontal",
+          ylab = "Ratio", xlab = "Groups",
+          )
+
+# Normality test
+# Shapiro-Wilk normality test for Gasoline MPG ratio
+with(my_data, shapiro.test(ratio[group == "gas_ratio"]))# p = 0.0001937
+
+# Shapiro-Wilk normality test for EV MPG ratio
+with(my_data, shapiro.test(ratio[group == "EV_ratio"])) # p = 0.0001738
+
+# F test - do they have same variances?
+res.ftest <- var.test(ratio ~ group, data = my_data)
+res.ftest
+
+# T - test
+res <- t.test(ratio ~ group, data = my_data, var.equal = TRUE)
+res
+```
+### Question 6: What is the trend of new vehicle models each year by fuel type?
+### (Inferential question - Regression)
+```{r}
+type_data <- clean_data %>%
+  select(Year, FuelType1, FuelType2)
+
+type_data <- type_data %>%
+  mutate(VehicleType = ifelse((FuelType1 == 'Gasoline' & is.na(FuelType2)), 'Gasoline', ifelse((FuelType1 == 'Gasoline' & FuelType2 == 'Electricity'), 'HEV', ifelse(FuelType1 == 'Electricity', 'BEV', ifelse((FuelType1 == 'Gasoline' & (FuelType2 == 'E85' | FuelType2 == 'Propane' | FuelType2 == 'Natural Gas')),'Hybrid',FuelType1)))))
+ 
+type_plot <- type_data %>%
+  group_by(Year, VehicleType) %>%
+  tally()
+
+type_plot <- type_plot %>%
+  rename(Count = n) %>%
+  filter(Year<2021)
+
+ggplot(type_plot, aes(x = Year, y = Count, color = VehicleType)) + 
+  geom_line() + 
+  scale_y_log10() +
+  ggtitle('Count of VehicleType Trend with Model Year') +
+  ylab('Count of VehicleType') + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank())
+
+# Regression 
+ggplot(data = gasoline, aes(x = Year, y = Count)) +
+geom_point() +
+stat_smooth(method = "lm", col = "dodgerblue3") +
+theme(panel.background = element_rect(fill = "white"),
+axis.line.x=element_line(),
+axis.line.y=element_line()) +
+ggtitle("Linear Model Fitted to Data")
+
+ggplot(data = bev, aes(x = Year, y = Count)) +
+geom_point() +
+stat_smooth(method = "lm", col = "dodgerblue3") +
+theme(panel.background = element_rect(fill = "white"),
+axis.line.x=element_line(),
+axis.line.y=element_line()) +
+ggtitle("Linear Model Fitted to Data")
+
+ggplot(data = hev, aes(x = Year, y = Count)) +
+geom_point() +
+stat_smooth(method = "lm", col = "dodgerblue3") +
+theme(panel.background = element_rect(fill = "white"),
+axis.line.x=element_line(),
+axis.line.y=element_line()) +
+ggtitle("Linear Model Fitted to Data")
 
 ```
 
