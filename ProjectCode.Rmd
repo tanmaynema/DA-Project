@@ -410,11 +410,12 @@ res
 ### (Inferential question - Regression)
 ```{r}
 type_data <- clean_data %>%
-  select(Year, FuelType1, FuelType2)
+  select(Year, FuelType1, FuelType2) %>%
+  mutate(FuelType1 = as.character(FuelType1), FuelType2 = as.character(FuelType2))
 
 type_data <- type_data %>%
-  mutate(VehicleType = ifelse((FuelType1 == 'Gasoline' & is.na(FuelType2)), 'Gasoline', ifelse((FuelType1 == 'Gasoline' & FuelType2 == 'Electricity'), 'HEV', ifelse(FuelType1 == 'Electricity', 'BEV', ifelse((FuelType1 == 'Gasoline' & (FuelType2 == 'E85' | FuelType2 == 'Propane' | FuelType2 == 'Natural Gas')),'Hybrid',FuelType1)))))
- 
+  mutate(VehicleType = if_else((FuelType1 == 'Gasoline' & is.na(FuelType2)), 'Gasoline', if_else((FuelType1 == 'Gasoline' & is.na(FuelType2)), 'Gasoline', if_else((FuelType1 == 'Gasoline' & FuelType2 == 'Electricity'), 'HEV', if_else(FuelType1 == 'Electricity', 'BEV', if_else((FuelType1 == 'Gasoline' & (FuelType2 == 'E85' | FuelType2 == 'Propane' | FuelType2 == 'Natural Gas')),'Hybrid',FuelType1))))))
+
 type_plot <- type_data %>%
   group_by(Year, VehicleType) %>%
   tally()
@@ -423,38 +424,51 @@ type_plot <- type_plot %>%
   rename(Count = n) %>%
   filter(Year<2021)
 
+gasoline <- type_plot %>%
+  filter(VehicleType == 'Gasoline')
+
+bev <- type_plot %>%
+  filter(VehicleType == 'BEV')
+
+hev <- type_plot %>%
+  filter(VehicleType == 'HEV')
+
 ggplot(type_plot, aes(x = Year, y = Count, color = VehicleType)) + 
   geom_line() + 
   scale_y_log10() +
   ggtitle('Count of VehicleType Trend with Model Year') +
   ylab('Count of VehicleType') + 
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        axis.title.x = element_blank())
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1),
+        axis.title.x = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"))
 
 # Regression 
 ggplot(data = gasoline, aes(x = Year, y = Count)) +
 geom_point() +
 stat_smooth(method = "lm", col = "dodgerblue3") +
+  stat_regline_equation(label.x = 1988, label.y = 1500)+
 theme(panel.background = element_rect(fill = "white"),
 axis.line.x=element_line(),
 axis.line.y=element_line()) +
-ggtitle("Linear Model Fitted to Data")
+ggtitle("Linear Model Fitted to Gasoline Vehicles")
 
 ggplot(data = bev, aes(x = Year, y = Count)) +
 geom_point() +
 stat_smooth(method = "lm", col = "dodgerblue3") +
+  stat_regline_equation(label.x = 2000, label.y = 32)+
 theme(panel.background = element_rect(fill = "white"),
 axis.line.x=element_line(),
 axis.line.y=element_line()) +
-ggtitle("Linear Model Fitted to Data")
+ggtitle("Linear Model Fitted to BEV Vehicles")
 
 ggplot(data = hev, aes(x = Year, y = Count)) +
 geom_point() +
 stat_smooth(method = "lm", col = "dodgerblue3") +
+  stat_regline_equation(label.x = 2012, label.y = 32)+
 theme(panel.background = element_rect(fill = "white"),
 axis.line.x=element_line(),
 axis.line.y=element_line()) +
-ggtitle("Linear Model Fitted to Data")
+ggtitle("Linear Model Fitted to HEV Vehicles")
 
 ```
 
